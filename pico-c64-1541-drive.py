@@ -2,6 +2,7 @@ from machine import Pin
 import time
 import select
 import sys
+import utime
 
 
 IEC_TRUE = 0
@@ -69,49 +70,70 @@ def setData_TRUE():
     IEC_1541_DATA.value(IEC_TRUE)
 def setData_FALSE():
     IEC_1541_DATA.value(IEC_FALSE)    
-
+def waitATN_IEC_TRUE():
+    currentATN = IEC_1541_ATN.value()
+    while  currentATN == IEC_FALSE:
+        currentATN = IEC_1541_ATN.value()        
+def waitATN_IEC_FALSE():
+    currentATN = IEC_1541_ATN.value()
+    while  currentATN == IEC_TRUE:
+        currentATN = IEC_1541_ATN.value()        
 
 def readData():
     IEC_1541_CLOCK = Pin(2,Pin.IN)
     IEC_1541_DATA = Pin(3,Pin.OUT)
     
     waitClock_TRUE()
+    
     setData_TRUE()
+    timeBefore =  utime.ticks_us()
     waitClock_FALSE()
-    ### need to put check here to make sure time in usec is less than 200 otherwise handle EOI 
+    timeAfter =  utime.ticks_us()
+    
+    if (timeAfter - timeBefore > 200):      
+        IEC_1541_DATA = Pin(3,Pin.OUT)
+        setData_TRUE()
+        timeBefore =  utime.ticks_us()
+        timeAfter = 0
+        while timeAfter - timeBefore < 60:
+            timeAfter =  utime.ticks_us()
+        #sys.stdout.write('EOI ')        
+        #sys.stdout.write(str(timeAfter - timeBefore))
+        #sys.stdout.write('\n')            
+        return 0x00
     
     IEC_1541_DATA = Pin(3,Pin.IN)
     
     data = 0x00;
-    i = 0; 
-    while i < 8:
+    
+    for i in range(1, 8):
         waitClock_FALSE()  
-        temp = IEC_1541_DATA.value()   
-        data = temp | data
+        pinVal = IEC_1541_DATA.value() & 0x01
+        data = data | pinVal
         data = data << 1; 
         waitClock_TRUE()
-        i += 1
     
     IEC_1541_DATA = Pin(3,Pin.OUT)
     setData_TRUE() ## acknowledge the 8 bits
     return data     
 
 ### MAIN routine   
-#testPins()
+##testPins()
 loopCount = 0
 
 while True:
 
     # slow down heartbeat led toggle
     #if loopCount % 5000 == 0:
+    waitATN_IEC_TRUE()
            
-    data = readData()
-    Str = "rx: 0x{:x}".format(data)
-    # Send the data
-    sys.stdout.write(Str)
-    sys.stdout.write('\n');
+    
+    if (readData() & 0xff == 0x28):
+        # Send the data
+        sys.stdout.write('0x28\n')    
    
     led.toggle()
+    waitATN_IEC_FALSE()
     #loopCount = loopCount + 1
                 
     
