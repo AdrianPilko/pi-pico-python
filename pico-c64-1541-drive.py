@@ -60,32 +60,59 @@ def testPins():
         loopCount = loopCount + 1
 
 
-@rp2.asm_pio(set_init=rp2.PIO.OUT_LOW)
-def blink_1hz():
-    # Cycles: 1 + 1 + 6 + 32 * (30 + 1) = 1000
-    irq(rel(0))
-    set(pins, 1)
-    set(x, 31)                  [5]
-    label("delay_high")
-    nop()                       [29]
-    jmp(x_dec, "delay_high")
+@rp2.asm_pio()
+def handleCBM_BusLowLevel():
+    set(pins, 0b00001001)  # Set pin 0 and 3 as inputs
+    wrap_target()    
+    wait(3, pin, 0)   # wait for ATN pin to go  IEC_TRUE = 0 (note not final solution)
+    irq(block, rel(0))    
+    wait(0, pin, 0)   # wait for clock pin to go  IEC_TRUE = 0
+    wait(0, pin, 1)   # wait for clock pin to go  IEC_FALSE = 1 rising edge
+    out(pins, 1)     [31]   # output high to data pin
+    set(pins, 0b00001011)      # set data pin to input
+    set(x,7)          # setup read loop count 8 bits into x    
+    label("bitReadLoop")
+    wait(0, pin, 0)   # wait while the clock pin IEC_TRUE = 0    
+    wait(0, pin, 1)   # wait for clock pin to go  IEC_FALSE = 1 rising edge
+    ##pull()   locks up if this is commented in
+    mov(y, osr)
+    mov(isr, y)
+    push()   
+    jmp(x_dec, "bitReadLoop")
+    irq(block, rel(0))    
+    set(pindirs, 2)  [31]    # set data pin to output
+    out(pins, 1)
+    set(pins, 2)  [31]    # set data pin to input
+    #irq(block, rel(0))    
+    wrap()
+    
+def handler(sm):
+    # Print a (wrapping) timestamp, and the state machine object.
+    print(time.ticks_ms(), sm)
 
-    # Cycles: 1 + 7 + 32 * (30 + 1) = 1000
-    set(pins, 0)
-    set(x, 31)                  [6]
-    label("delay_low")
-    nop()                       [29]
-    jmp(x_dec, "delay_low")
+basePin = Pin(IEC_PIN_CLOCK)
+sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel, in_base=basePin)
 
+# Function to read from FIFO
+def read_fifo():
+    while True:
+        yield sm0.get()
+        
 def testPinsPIO():
-    # Create the StateMachine with the blink_1hz program, outputting on Pin(25).
-    sm = rp2.StateMachine(0, blink_1hz, freq=2000, set_base=Pin(13))
-
-    # Set the IRQ handler to print the millisecond timestamp.
-    sm.irq(lambda p: print(time.ticks_ms()))
-
-    # Start the StateMachine.
-    sm.active(1)
+### base pin 2 = CLOCK = 0
+###      pin 3 = DATA  = 1
+###      pin 4 = RESET = 2
+###      pin 5 = ATN   = 3
+    # Instantiate StateMachine(0) with base pin 2 (CLOCK)
+    #basePin = Pin(IEC_PIN_CLOCK)
+    #sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel, in_base=basePin)
+    sm0.irq(handler)
+    sm0.active(1)    
+    while True:
+        for data in read_fifo():
+            print("Received:", data)
+    
+    
 
 def waitClock_TRUE():
     IEC_1541_CLOCK = Pin(IEC_PIN_CLOCK,Pin.IN)
