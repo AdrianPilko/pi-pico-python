@@ -99,7 +99,17 @@ def testPins():
         
         loopCount = loopCount + 1
 
-### The purpose of this PIO state machine is to handle all the low level CBM Bus activity      
+#read clock PIO waits for clock rising from 0 (true) to 1 (false) then siganls IRQ
+@rp2.asm_pio()
+def readClockPinPIO():
+    set(pins, 1)   # set base pin (clock to input)
+    wrap_target()
+    wait(0, pin, 0)   [31]
+    wait(0, pin, 0)   [31]
+    irq(block, rel(0))    
+    wrap()
+    
+### The purpose of this PIO state machine is to handle all the low level CBM Bus activity
 @rp2.asm_pio()
 def handleCBM_BusLowLevel():
     ## Base pin 0 should be IEC_PIN_CLOCK == GPIO 2
@@ -138,7 +148,7 @@ def handler(sm):
 
 basePin = Pin(IEC_PIN_CLOCK)
 #sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel, in_base=basePin)
-sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel,freq=2000, in_base=basePin)
+sm0 = rp2.StateMachine(0, readClockPinPIO,freq=2000, in_base=basePin)
 
 # Function to read from FIFO
 def read_fifo():
@@ -155,9 +165,9 @@ def testPinsPIO():
     #sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel, in_base=basePin)
     sm0.irq(handler)
     sm0.active(1)    
-    while True:
-        for data in read_fifo():
-            print("Received:", data)
+    #while True:
+    #    for data in read_fifo():
+    #        print("Received:", data)
             
     
     
