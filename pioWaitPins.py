@@ -9,15 +9,15 @@ def atn():
     wait(0, pin, 0)  # Wait for pin to go low
     wait(1, pin, 0)  # Low to high transition
     #label('low_high')
-    ##jmp(pin, 'low_high')  # while pin is low
+    #jmp(pin, 'low_high')  # while pin is low
     in_(x, 32)  # Auto push: SM stalls if FIFO full
     wrap()
 @rp2.asm_pio(set_init=rp2.PIO.IN_LOW, autopush=True, push_thresh=32)
 def clock():
     wrap_target()
     set(x, 0)
-    wait(1, pin, 0)  # Wait for pin to go low
-    wait(0, pin, 0)  # Low to high transition
+    wait(1, pin, 0)  # Wait for pin to go low (TRUE)
+    wait(0, pin, 0)  # Low to high transition (TRUE TO FALSE)
     #label('low_high')
     #jmp(pin, 'low_high')  # while pin is high
     in_(x, 32)  # Auto push: SM stalls if FIFO full
