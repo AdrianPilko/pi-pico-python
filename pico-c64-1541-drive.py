@@ -70,34 +70,39 @@ def readClockPinPIO():
     wrap()
     
 ### The purpose of this PIO state machine is to handle all the low level CBM Bus activity
+    
+###comments are mostly from https://en.wikipedia.org/wiki/Commodore_bus
 @rp2.asm_pio()
 def handleCBM_BusLowLevel():
-    ## Base pin 0 should be IEC_PIN_CLOCK == GPIO 2
+    ## Base pin 0 should be IEC_PIN_CLOCK == GPIO 2    
+    wrap_target()
     set (pindirs, 0b00000010)  # Set clock 0 and atn 2 as inputs, pin 1 data is an output
-    wrap_target()    
-    wait(0, pin, 2)   # wait for ATN pin to go  IEC_TRUE = 0 (note not final solution)    
-    wait(0, pin, 0)   # wait for clock pin to go  IEC_TRUE = 0
-    wait(1, pin, 0)   # wait for clock pin to go  IEC_FALSE = 1 rising edge
-
-    set(x,1)
-    mov(osr,x)
-    out(pins, 1)   [31]           # set data pin to high and wait 31 clock cycles
-    set(pindirs, 0b00000000)      # set all pins to input
     
+    ##wait(0, pin, 2)   # wait for ATN pin to go  IEC_TRUE = 0 (note not final solution)    
+    
+    # Transmission begins with the bus talker holding the Clock line true (ZERO),
+    # and the listener(s) holding the Data line true. To begin the talker
+    # releases the Clock line to false.
+    wait(0, pin, 0)   # wait for clock pin TRUE
+    set(1,0)			 # hold data line TRUE
+    
+    #When all bus listeners are ready to receive they release the Data line to false.
+    set(1,1)			 # hold data line to FALSE
+    
+    set(pindirs, 0b00000000)      # set all pins to input    
     set(x,8)          # setup read loop count 8 bits into x
     
-    wait(0, pin, 0)   # wait for clock pin IEC_TRUE = 0    
+    wait(0, pin, 0)
+    
     label("bitReadLoop")  
-    wait(1, pin, 0)   # wait for clock pin to go  IEC_FALSE = 1 rising edge
+    wait(1, pin, 0)
     in_(1, 1)         # read 1 bit from pin 1 (Data)   
     wait(0, pin, 0)   # wait for the clock pin IEC_TRUE = 0    
     jmp(x_dec, "bitReadLoop")
     
     push(block)            # push the 8 bits to the cpu    
     set(pindirs, 0b00000010)    # set data pin to output
-    set(x,1)
-    mov(osr,x)
-    out(pins, 1)   [31]      
+    set(1,0)    [31]
     wrap()
 
 basePin = Pin(IEC_PIN_CLOCK)
@@ -115,6 +120,6 @@ def testPinsPIO():
     sm0.active(1)    
     while True:
         for data in read_fifo():
-            print("Received:", data & 0xff)
+            print("Received:", ~data & 0xff)
 
 testPinsPIO()
