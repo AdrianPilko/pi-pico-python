@@ -77,22 +77,24 @@ def handleCBM_BusLowLevel():
     ## Base pin 0 should be IEC_PIN_CLOCK == GPIO 2    
     wrap_target()
     set (pindirs, 0b00000010)  # Set clock 0 and atn 2 as inputs, pin 1 data is an output
-    
+   
+    ## set(dest, value)
     ##wait(0, pin, 2)   # wait for ATN pin to go  IEC_TRUE = 0 (note not final solution)    
     
     # Transmission begins with the bus talker holding the Clock line true (ZERO),
     # and the listener(s) holding the Data line true. To begin the talker
     # releases the Clock line to false.
-    wait(0, pin, 0)   # wait for clock pin TRUE
-    set(1,0)			 # hold data line TRUE
+    wait(0, pin, 0)   # initially wait for clock pin TRUE=0
+    set(0,0)		  # initially set data line TRUE
     
+    wait(1, pin, 0)   # wait for clock pin false=1
     #When all bus listeners are ready to receive they release the Data line to false.
     set(1,1)			 # hold data line to FALSE
     
     set(pindirs, 0b00000000)      # set all pins to input    
     set(x,8)          # setup read loop count 8 bits into x
     
-    wait(0, pin, 0)
+    wait(0, pin, 0)   # wait for clock true 0 in prep for rising edge
     
     label("bitReadLoop")  
     wait(1, pin, 0)
