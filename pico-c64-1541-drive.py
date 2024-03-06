@@ -37,7 +37,7 @@
 ##     5) use to diagnose C64 (and other commodore) computers that support the 1541 disk drive
 
 from machine import Pin
-import rp2 
+from rp2 import PIO, StateMachine, asm_pio
 import time
 import select
 import sys
@@ -54,10 +54,10 @@ IEC_PIN_ATN = 4
 IEC_PIN_RESET = 5 
 
 ## some pins for LED to enable quick debugging
-ledClock = Pin(10, Pin.OUT)
-ledData = Pin(11, Pin.OUT)
-ledATN = Pin(12, Pin.OUT)
-ledHeartbeat = Pin(13, Pin.OUT)
+ledClock = Pin(6, Pin.OUT)
+ledData = Pin(7, Pin.OUT)
+ledATN = Pin(8, Pin.OUT)
+ledHeartbeat = Pin(9, Pin.OUT)
 
 #read clock PIO waits for clock rising from 0 (true) to 1 (false) then siganls IRQ
 @rp2.asm_pio()
@@ -72,47 +72,46 @@ def readClockPinPIO():
 ### The purpose of this PIO state machine is to handle all the low level CBM Bus activity
     
 ###comments are mostly from https://en.wikipedia.org/wiki/Commodore_bus
-@rp2.asm_pio()
+@rp2.asm_pio(autopush=True, push_thresh=8)
 def handleCBM_BusLowLevel():
-    ## Base pin 0 should be IEC_PIN_CLOCK == GPIO 2    
+    ## Base pin 0 should be IEC_PIN_CLOCK == GPIO 2
+    set (pindirs, 0b0010)  # Set clock 0 and atn 2 as inputs, pin 1 data is an output    
     wrap_target()
-    set (pindirs, 0b00000010)  # Set clock 0 and atn 2 as inputs, pin 1 data is an output
+    
    
     ## set(dest, value)
-    ##wait(0, pin, 2)   # wait for ATN pin to go  IEC_TRUE = 0 (note not final solution)    
-    
+    #wait(0, pin, 2)   # wait for ATN pin to go  IEC_TRUE = 0 (note not final solution)    
     # Transmission begins with the bus talker holding the Clock line true (ZERO),
     # and the listener(s) holding the Data line true. To begin the talker
     # releases the Clock line to false.
-    wait(0, pin, 0)   # initially wait for clock pin TRUE=0
-    set(0,0)		  # initially set data line TRUE
-    
+    wait(0, pin, 0)    # initially wait for clock pin TRUE=0
+    set(1,0)		   # initially set data line TRUE
+   
     wait(1, pin, 0)   # wait for clock pin false=1
+    
     #When all bus listeners are ready to receive they release the Data line to false.
     set(1,1)			 # hold data line to FALSE
     
-    set(pindirs, 0b00000000)      # set all pins to input    
+    set(pindirs, 0b0000)      # set all pins to input    
     set(x,8)          # setup read loop count 8 bits into x
-    
+    ##wait(polarity, src, index)
     wait(0, pin, 0)   # wait for clock true 0 in prep for rising edge
     
     label("bitReadLoop")  
     wait(1, pin, 0)
-    in_(1, 1)         # read 1 bit from pin 1 (Data)   
+    in_(1, 1)           # read 1 bit from pin 1 (Data)   
     wait(0, pin, 0)   # wait for the clock pin IEC_TRUE = 0    
     jmp(x_dec, "bitReadLoop")
     
-    push(block)            # push the 8 bits to the cpu    
-    set(pindirs, 0b00000010)    # set data pin to output
-    set(1,0)    [31]
+    wait(0, pin, 0)   # wait for the clock pin to go true
+    wait(0, pin, 0)   # wait for the data pin to go true
+     
+    set(pindirs, 0b0010)    # set data pin to output
+    set(1,0) [31]
     wrap()
 
 basePin = Pin(IEC_PIN_CLOCK)
 sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel,freq=125_000_000, in_base=basePin)
-# Function to read from FIFO
-def read_fifo():
-    while True:
-        yield sm0.get()
         
 def testPinsPIO():
 ### base pin 2 = CLOCK = 0
@@ -121,7 +120,7 @@ def testPinsPIO():
 ###      pin 5 = RESET = 3     ### not used
     sm0.active(1)    
     while True:
-        for data in read_fifo():
-            print("Received:", ~data & 0xff)
+        value = sm0.get()              
+        print(hex(value))
 
 testPinsPIO()
