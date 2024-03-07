@@ -55,7 +55,7 @@ def IEC_CBM_Bus():
     set(x,8)             # set bit loop max to 8bits    
     label("bitReadLoop")
     wait(0, pin, 0)   # wait for clock true 0 in prep for rising edge
-    wait(1, pin, 0)
+    wait(1, pin, 0)   # wait for clock to go high
     in_(1, 1)           # read 1 bit from pin 1 (Data)       
     jmp(x_dec, "bitReadLoop")
     
