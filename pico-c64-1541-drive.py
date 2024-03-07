@@ -51,33 +51,35 @@ IEC_FALSE = 1
 IEC_PIN_CLOCK = 2
 IEC_PIN_DATA = 3
 IEC_PIN_ATN = 4
-IEC_PIN_RESET = 5 
+IEC_PIN_RESET = 5
 
-## some pins for LED to enable quick debugging
-ledClock = Pin(6, Pin.OUT)
-ledData = Pin(7, Pin.OUT)
-ledATN = Pin(8, Pin.OUT)
-ledHeartbeat = Pin(9, Pin.OUT)
+DEBUG_PIN_CLOCK = 5
+DEBUG_PIN_DATA = 6
+DEBUG_PIN_ATN= 7
 
 #read clock PIO waits for clock rising from 0 (true) to 1 (false) then siganls IRQ
 @rp2.asm_pio()
-def readClockPinPIO():
-    set(pins, 1)   # set base pin (clock to input)
+def readPinsForDebugPIO():
+    set(pindirs, 0b00001111)   # set pins clock+data+atn+reset to input and rest to output
     wrap_target()
-    wait(0, pin, 0)   [31]
-    wait(0, pin, 0)   [31]
-    irq(block, rel(0))    
+    ##in_(src, bit_count)
+    in_(0, 1)    
+    in_(1, 1)
+    in_(2, 1)
+    in_(3, 1)
+    
     wrap()
     
 ### The purpose of this PIO state machine is to handle all the low level CBM Bus activity
     
 ###comments are mostly from https://en.wikipedia.org/wiki/Commodore_bus
+
+# autopush push_thresh mean you get 8bits at a time pushed automatically 
 @rp2.asm_pio(autopush=True, push_thresh=8)
 def handleCBM_BusLowLevel():
     ## Base pin 0 should be IEC_PIN_CLOCK == GPIO 2
     set (pindirs, 0b0010)  # Set clock 0 and atn 2 as inputs, pin 1 data is an output    
-    wrap_target()
-    
+    wrap_target()    
    
     ## set(dest, value)
     #wait(0, pin, 2)   # wait for ATN pin to go  IEC_TRUE = 0 (note not final solution)    
@@ -110,8 +112,10 @@ def handleCBM_BusLowLevel():
     set(1,0) [31]
     wrap()
 
-basePin = Pin(IEC_PIN_CLOCK)
-sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel,freq=125_000_000, in_base=basePin)
+basePinIEC = Pin(IEC_PIN_CLOCK)
+basePinDEBUG = Pin(DEBUG_PIN_CLOCK)
+sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel,freq=125_000_000, in_base=basePinIEC)
+sm1 = rp2.StateMachine(0, readPinsForDebugPIO,freq=125_000_000, in_base=basePinIEC)
         
 def testPinsPIO():
 ### base pin 2 = CLOCK = 0
