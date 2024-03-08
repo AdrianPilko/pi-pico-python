@@ -58,16 +58,13 @@ DEBUG_PIN_DATA = 6
 DEBUG_PIN_ATN= 7
 
 #read clock PIO waits for clock rising from 0 (true) to 1 (false) then siganls IRQ
-@rp2.asm_pio()
+@rp2.asm_pio(autopush=True, push_thresh=32,in_shiftdir=rp2.PIO.SHIFT_LEFT)
 def readPinsForDebugPIO():
-    set(pindirs, 0b00001111)   # set pins clock+data+atn+reset to input and rest to output
+    set(pindirs, 0)   # set pins clock+data+atn+reset to input 
     wrap_target()
     ##in_(src, bit_count)
-    in_(0, 1)    
-    in_(1, 1)
-    in_(2, 1)
-    in_(3, 1)
-    
+    wait (0,pin,0)    
+    in_(pins, 32)    
     wrap()
     
 ### The purpose of this PIO state machine is to handle all the low level CBM Bus activity
@@ -95,10 +92,11 @@ def handleCBM_BusLowLevel():
     set(1,1)			 # hold data line to FALSE
     
     set(pindirs, 0b0000)      # set all pins to input    
-    set(x,8)          # setup read loop count 8 bits into x
+    
     ##wait(polarity, src, index)
     wait(0, pin, 0)   # wait for clock true 0 in prep for rising edge
     
+    set(x,8)	# setup read loop count 8 bits into x
     label("bitReadLoop")  
     wait(1, pin, 0)
     in_(1, 1)           # read 1 bit from pin 1 (Data)   
@@ -109,22 +107,25 @@ def handleCBM_BusLowLevel():
     wait(0, pin, 0)   # wait for the data pin to go true
      
     set(pindirs, 0b0010)    # set data pin to output
-    set(1,0) [31]
+    set(1,0) 
     wrap()
 
 basePinIEC = Pin(IEC_PIN_CLOCK)
 basePinDEBUG = Pin(DEBUG_PIN_CLOCK)
-sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel,freq=125_000_000, in_base=basePinIEC)
-sm1 = rp2.StateMachine(0, readPinsForDebugPIO,freq=125_000_000, in_base=basePinIEC)
+sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel,freq=2000000, in_base=basePinIEC)
+#sm1 = rp2.StateMachine(0, readPinsForDebugPIO,freq=125_000_000, in_base=basePinIEC)
         
 def testPinsPIO():
 ### base pin 2 = CLOCK = 0
 ###      pin 3 = DATA  = 1
 ###      pin 4 = ATN   = 2
 ###      pin 5 = RESET = 3     ### not used
-    sm0.active(1)    
+    sm0.active(1)
+    count = 0
     while True:
-        value = sm0.get()              
-        print(hex(value))
+        count = count + 1
+        value = sm0.get()
+        basePinDEBUG.toggle()
+        print(count, bin(value))
 
 testPinsPIO()

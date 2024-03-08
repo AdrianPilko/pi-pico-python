@@ -1,6 +1,5 @@
 import utime
-
-import rp2
+from rp2 import PIO 
 from machine import Pin
 
 PIO0_BASE = const(0x50200000)
@@ -26,51 +25,64 @@ SM_FIFO_RXEMPTY = const(0x00000100)
 SM_FIFO_TXFULL  = const(0x00010000)
 SM_FIFO_TXEMPTY = const(0x01000000)
 
-@rp2.asm_pio(autopush=True,push_thresh=8, in_shiftdir=rp2.PIO.SHIFT_LEFT)
+@rp2.asm_pio(set_init=(rp2.PIO.IN_LOW,rp2.PIO.OUT_LOW, rp2.PIO.IN_LOW), autopush=True,push_thresh=8, in_shiftdir=rp2.PIO.SHIFT_LEFT)
 def IEC_CBM_Bus():
     ## reminder of instruction args in micropython:
     #wait(polarity, src, index)
     #in_(src, bit_count)
     #set(dest, data)
     ## setting pindirs = decimal 2 = binary 10 = base+1 = data = output, clock = 0 = input
-    ## setting pindirs = decimal 0 = binary 0 = base+1 = data = input, clock = 0 = input
-    set(pindirs, 0b010)
+    ## setting pindirs = decimal 0 = binary 0 = base+1 = data = input, clock = 0 = input   
     
-    wait(0, pins, 2) ## wait for ATN to go low (true) but only on bus command
+    ### next line commented out for now just deal with clock and data
+    ##wait(0, pins, 2) ## wait for ATN to go low (true) but only on bus command
+    set(pindirs, 0b10)   # clock input - data output
+    
     wrap_target()  
-
-    # Transmission begins with the bus talker holding the Clock line true (ZERO),
-    # and the listener(s) holding the Data line true. To begin the talker
-    # releases the Clock line to false.
-    set(pindirs, 0b010)
-    set(1,0)          # initially set data line TRUE
-    wait(0, pin, 0)   # initially wait for clock pin TRUE=0
-    wait(1, pin, 0)   # wait for clock pin false=1
-  
-    #When all bus listeners are ready to receive they release the Data line to false.
-    set(1,0)          # hold data line to FALSE
-    
-    set(pindirs, 0b000)   # set both clock and data to input    
-       
+    set(1,0)       [31]   # when ready to receive the listener sets data pin to TRUE "I'm here"
+    #########
+    ## initial state before the instigation of any data transfer
+    #########
+    wait(1, pin, 0)   # wait for clock pin FALSE=1 (on pin 0) set by talker
+    set(1,1)       [31]   # when ready to receive the listener sets data pin to FALSE = 1
+        
+    set(pindirs, 0)  # set both clock and data to input
+      
     set(x,8)             # set bit loop max to 8bits    
-    label("bitReadLoop")
-    wait(0, pin, 0)   # wait for clock true 0 in prep for rising edge
+    label("bitReadLoop")    
     wait(1, pin, 0)   # wait for clock to go high
-    in_(1, 1)           # read 1 bit from pin 1 (Data)       
+    in_(1, 1)           # read 1 bit from pin 1 (Data)
+    wait(0, pin, 0)   # wait for clock true 0 in prep for rising edge
     jmp(x_dec, "bitReadLoop")
     
-    set(pindirs, 0b010)   # set both clock and data to input    
+    set(pindirs, 0b10)   # clock input - data output
     set(1,0)   [31]            # hold data line false
-    set(1,0)   [31]             # hold data line false
-    set(1,0)   [31]            # hold data line false for total  1 / (125Mhz / 93) seconds = 0.01
     wrap()
  
 
     
 class IEC1541Pio():
     def __init__(self, clockGPIO, DataGPIO, ATN_GPIO, instance):
+        ## set the pins up although data pin overwritten by SM handshaking 
+        myPin = Pin(clockGPIO,Pin.IN)
+        myPin.value(1)
+        utime.sleep_ms(1)
+        #myPin.init(Pin.IN,Pin.PULL_DOWN)
+
+        myPin = Pin(DataGPIO,Pin.IN)
+        myPin.value(1)
+        utime.sleep_ms(1)
+        #myPin.init(Pin.OUT,Pin.PULL_DOWN)
+        
+        myPin = Pin(ATN_GPIO,Pin.IN)
+        myPin.value(1)
+        utime.sleep_ms(1)
+        #myPin.init(Pin.IN,Pin.PULL_DOWN)
+                
+        utime.sleep_ms(100)
+        
         # running on the 2nd pio block which is state machine 4-7, instance count allows multiple
-        self.sm = rp2.StateMachine(instance, IEC_CBM_Bus, freq=125_000_000,in_base=Pin(clockGPIO), set_base=Pin(clockGPIO),jmp_pin=Pin(clockGPIO))        
+        self.sm = rp2.StateMachine(instance, IEC_CBM_Bus, freq=2000000,in_base=Pin(clockGPIO), set_base=Pin(clockGPIO))        
         
         self.sm.active(1)
         self.tx_Data = 0x00
