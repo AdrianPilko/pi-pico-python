@@ -110,13 +110,9 @@ def handleCBM_BusLowLevel():
     wait(1, gpio, 2)   # wait for clock pin to go  IEC_FALSE = 1 (rising edge)    
     in_(pins, 1)           # read 1 bit from pin 1 (Data)   
     wait(0, gpio, 2)   # wait for clock pin to go  IEC_TRUE = 0
-    
-    ##DEBUG fil fifo with a progress counter - this will be read by main loop (we have autopush 8 set 
-    set(x,2)
-    in_(x, 8)
-    ##    
+      
     jmp(x_dec, "bitReadLoop")
-    
+        
     ##DEBUG fil fifo with a progress counter - this will be read by main loop (we have autopush 8 set 
     set(x,4)
     in_(x, 8)
