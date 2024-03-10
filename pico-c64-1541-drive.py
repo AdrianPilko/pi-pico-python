@@ -68,64 +68,111 @@ def readPinsForDebugPIO():
     wrap()
     
 ### The purpose of this PIO state machine is to handle all the low level CBM Bus activity
-    
-###comments are mostly from https://en.wikipedia.org/wiki/Commodore_bus
+   
+## reminder of instruction args in micropython:
+#wait(polarity, src, index)
+#in_(src, bit_count)
+#set(dest, data)
+#out(dest, bit_count)
+#mov(dest, src)
 
-# autopush push_thresh mean you get 8bits at a time pushed automatically 
-@rp2.asm_pio(autopush=True, push_thresh=8)
+# autopush push_thresh mean you get 8bits at a time pushed automatically
+####################### CLOCK ###### DATA ###### ATN
+@rp2.asm_pio(set_init=(PIO.OUT_LOW, PIO.OUT_LOW,PIO.OUT_LOW),autopush=True, push_thresh=8)
 def handleCBM_BusLowLevel():
-    ## Base pin 0 should be IEC_PIN_CLOCK == GPIO 2
-    set (pindirs, 0b0010)  # Set clock 0 and atn 2 as inputs, pin 1 data is an output    
-    wrap_target()    
-   
-    ## set(dest, value)
-    #wait(0, pin, 2)   # wait for ATN pin to go  IEC_TRUE = 0 (note not final solution)    
-    # Transmission begins with the bus talker holding the Clock line true (ZERO),
-    # and the listener(s) holding the Data line true. To begin the talker
-    # releases the Clock line to false.
-    wait(0, pin, 0)    # initially wait for clock pin TRUE=0
-    set(1,0)		   # initially set data line TRUE
-   
-    wait(1, pin, 0)   # wait for clock pin false=1
+    wrap_target()
     
-    #When all bus listeners are ready to receive they release the Data line to false.
-    set(1,1)			 # hold data line to FALSE
+    ## pin settings, these change during the runtime of the protocol     
+    wait(0, gpio, 4)   # wait for ATN pin to go  IEC_TRUE = 0 (note not final solution)
     
-    set(pindirs, 0b0000)      # set all pins to input    
+    set(pindirs,0b00010)     # all pins input except data
+
+    ## step 0: as listener (from IEC desected)
+    set(pins,0b00000)     # set data to TRUE = 0V       
+    wait(0, gpio, 2)      # wait for clock true    
+        
+    ##DEBUG fil fifo with a progress counter - this will be read by main loop (we have autopush 8 set 
+    set(x,1)
+    in_(x, 8)
+    ##
     
-    ##wait(polarity, src, index)
-    wait(0, pin, 0)   # wait for clock true 0 in prep for rising edge
+    ## step 1: ready to recieve (from IEC desected)
+    wait(1,gpio, 2)       # wait for clock line false
+    set(0,0b00010)     # set data to TRUE = 0V       
     
+    # step 2: get ready for data : step all pins to input (clock and data)
+    set(pindirs, 0b00000)      # set all pins to input    
+    wait(0, gpio, 2)   # wait for clock line to go true
+
     set(x,8)	# setup read loop count 8 bits into x
     label("bitReadLoop")  
-    wait(1, pin, 0)
-    in_(1, 1)           # read 1 bit from pin 1 (Data)   
-    wait(0, pin, 0)   # wait for the clock pin IEC_TRUE = 0    
+    
+    wait(1, gpio, 2)   # wait for clock pin to go  IEC_FALSE = 1 (rising edge)    
+    in_(pins, 1)           # read 1 bit from pin 1 (Data)   
+    wait(0, gpio, 2)   # wait for clock pin to go  IEC_TRUE = 0
+    
+    ##DEBUG fil fifo with a progress counter - this will be read by main loop (we have autopush 8 set 
+    set(x,2)
+    in_(x, 8)
+    ##    
     jmp(x_dec, "bitReadLoop")
     
-    wait(0, pin, 0)   # wait for the clock pin to go true
-    wait(0, pin, 0)   # wait for the data pin to go true
-     
-    set(pindirs, 0b0010)    # set data pin to output
-    set(1,0) 
+    ##DEBUG fil fifo with a progress counter - this will be read by main loop (we have autopush 8 set 
+    set(x,4)
+    in_(x, 8)
+    ##
+    
+    ### step 4 Frame handshake: after 8th bit the clock line is true and data line false
+    ## talker expects acknowledge by listener setting data line true
+    wait(1, gpio, 3)      # wait for data line false
+    wait(0, gpio, 2)      # wait for clock line true    
+    set(pindirs, 0b00010) # set data pin to output
+    set(0,0b00010)     # set data pin to false to signal to talker we've received the bits
+    
+    ##DEBUG fil fifo with a progress counter - this will be read by main loop (we have autopush 8 set 
+    set(x,5)
+    in_(x, 8)
+    ##    
     wrap()
 
-basePinIEC = Pin(IEC_PIN_CLOCK)
-basePinDEBUG = Pin(DEBUG_PIN_CLOCK)
-sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel,freq=2000000, in_base=basePinIEC)
-#sm1 = rp2.StateMachine(0, readPinsForDebugPIO,freq=125_000_000, in_base=basePinIEC)
-        
+     
 def testPinsPIO():
 ### base pin 2 = CLOCK = 0
 ###      pin 3 = DATA  = 1
 ###      pin 4 = ATN   = 2
-###      pin 5 = RESET = 3     ### not used
+###      pin 5 = RESET = 3     ### not used (yet)
+    
+    IEC_CLOCK_PIN = Pin(2, Pin.IN)
+    IEC_DATA_PIN = Pin(3, Pin.IN)
+    IEC_ATN_PIN = Pin(4, Pin.IN)
+    print("starting bus state machine")
+    time.sleep_ms(100)
+    
+    basePinIEC = Pin(IEC_PIN_CLOCK)
+    basePinDEBUG = Pin(DEBUG_PIN_CLOCK)
+    sm0 = rp2.StateMachine(0, handleCBM_BusLowLevel,freq=4_000_000, in_base=2)
+    
     sm0.active(1)
     count = 0
     while True:
         count = count + 1
         value = sm0.get()
         basePinDEBUG.toggle()
-        print(count, bin(value))
+        print(count, hex(value))
 
 testPinsPIO()
+
+## set pins
+
+#IEC_CLOCK_PIN = Pin(2, Pin.IN, Pin.PULL_UP)
+#IEC_DATA_PIN = Pin(3, Pin.OUT, Pin.PULL_DOWN)
+#IEC_ATN_PIN = Pin(4, Pin.IN, Pin.PULL_UP)
+#count = 0
+#while True:
+#    IEC_DATA_PIN.value(0)
+#    if(IEC_ATN_PIN.value() == 0):
+#        #IEC_DATA_PIN = Pin(3, Pin.OUT, Pin.PULL_UP)
+#        print (count,hex(IEC_CLOCK_PIN.value()), hex(IEC_DATA_PIN.value()))
+#        #IEC_DATA_PIN = Pin(3, Pin.OUT, Pin.PULL_DOWN)        
+#    count+=1
+        
