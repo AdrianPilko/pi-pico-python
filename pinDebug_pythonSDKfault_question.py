@@ -28,17 +28,11 @@ def myPins():
     set(pindirs,0b010)  # set data output, clock input, atn input
     set(pins,0b00)    [26]# set data to true
     set(pins,0b00)    [26]# set data to true
-    set(pins,0b00)    [26]# set data to true
-    set(pins,0b00)    [26]# set data to true
-    set(pins,0b00)    [26]# set data to true
     # wait bus command wait for ATN true = 0
     wait(0, gpio, 3)   # wait for ATN true    
     wait(0, gpio, 2)   # wait for clock true
     #step 1
     wait(1, gpio, 2)  # wait for clock false - signals that talker ready to send
-    set(pins,0b00)    [26]# set data to true
-    set(pins,0b00)    [26]# set data to true
-    set(pins,0b00)    [26]# set data to true
     set(pins,0b00)    [26]# set data to true
     set(pins,0b00)    [26]# set data to true
    
@@ -65,7 +59,7 @@ def myPins():
     wrap()
 
 
-sm1 = StateMachine(0, myPins, freq=125_000_000,in_base=Pin(3), set_base=Pin(2))
+sm1 = StateMachine(0, myPins, freq=10_000_000,in_base=Pin(3), set_base=Pin(2))
 sm1.active(1)
 #sm2 = StateMachine(0, myPins, freq=2_000_000, set_base=Pin(3))
 #sm2.active(1)
