@@ -10,21 +10,42 @@ import time
 #out_init configures the pins used for out() instructions.
 #set_init configures the pins used for set() instructions. There can be at most 5.
 
+#current state of code is it outputs this when you issue LOAD"A",8 but only on first time
+#MPY: soft reboot
+#1 0b10100 0x28     << correct
+#2 0b10000111 0xe1  << wrong should be 0xf0
+#3 0b11111111 0xff  << should be filename bytes "A" in petsci
+#4 0b100010 0x44    << should be 0x3f unlisten
+#5 0b1010000 0xa    << should be 48 tells device 8 to talk
+
+
 @asm_pio(set_init=(PIO.IN_LOW, PIO.OUT_LOW, PIO.IN_LOW),autopush=True, push_thresh=8,in_shiftdir=PIO.SHIFT_LEFT)
 def myPins():
-    # wait bus command wait for ATN true = 0
-    wait(0, gpio, 2)   # wait for ATN true
+
     wrap_target()
+    
     #step 0
-    set(pindirs,0b010)  # set data output, clock input, atn input    
-    set(pins,0b00)   # set data to true
-    set(pins,0b00)  [20]  # set data to true
+    set(pindirs,0b010)  # set data output, clock input, atn input
+    set(pins,0b00)    [26]# set data to true
+    set(pins,0b00)    [26]# set data to true
+    set(pins,0b00)    [26]# set data to true
+    set(pins,0b00)    [26]# set data to true
+    set(pins,0b00)    [26]# set data to true
+    # wait bus command wait for ATN true = 0
+    wait(0, gpio, 3)   # wait for ATN true    
     wait(0, gpio, 2)   # wait for clock true
     #step 1
-    wait(1, gpio, 2) [20]  # wait for clock false - signals that talker ready to send
-    set(pins,0b00)    [20]  # set data to true
+    wait(1, gpio, 2)  # wait for clock false - signals that talker ready to send
+    set(pins,0b00)    [26]# set data to true
+    set(pins,0b00)    [26]# set data to true
+    set(pins,0b00)    [26]# set data to true
+    set(pins,0b00)    [26]# set data to true
+    set(pins,0b00)    [26]# set data to true
+   
+    set(pins,0b00)    [13]# set data to true
+    #set(pins,0b00)    [26]# set data to true    
     #step 2
-    set(pins,0b10)  [20]  # set data to false
+    set(pins,0b10)   # set data to false
     set(pindirs,0b000)  # set both pins to inputs    
     set(x,8)
     wait(0, gpio, 2)
@@ -38,17 +59,13 @@ def myPins():
     ##DEBUG fil fifo with a progress counter - this will be read by main loop (we have autopush 8 set 
     #set(x,4)
     #in_(x, 8)
-    ##
-    
+    ##    
     # step 4
     wait(0, gpio, 2)    # wait for clock true
-    set(pindirs,0b010)  # set data output, clock input, atn input
-    set(pins,0b00)  [20]         # set data pin to true
-    set(pins,0b00)  [20]         # set data pin to true
     wrap()
 
 
-sm1 = StateMachine(0, myPins, freq=2_000_000,in_base=Pin(3), set_base=Pin(2))
+sm1 = StateMachine(0, myPins, freq=125_000_000,in_base=Pin(3), set_base=Pin(2))
 sm1.active(1)
 #sm2 = StateMachine(0, myPins, freq=2_000_000, set_base=Pin(3))
 #sm2.active(1)
@@ -59,7 +76,7 @@ while True:
         count = count + 1
         rawValue = sm1.get()
         toConvert = rawValue
-        inverted_bits = ~toConvert & 0xff
+        inverted_bits = toConvert & 0xff
         # Convert from MSB to LSB
         msb_to_lsb = 0
         for i in range(8):
