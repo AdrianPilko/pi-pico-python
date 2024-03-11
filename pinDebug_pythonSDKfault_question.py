@@ -19,27 +19,27 @@ import time
 #5 0b1010000 0xa    << should be 48 tells device 8 to talk
 
 
-@asm_pio(set_init=(PIO.IN_LOW, PIO.OUT_LOW, PIO.IN_LOW),autopush=True, push_thresh=8,in_shiftdir=PIO.SHIFT_LEFT)
+@asm_pio(set_init=(PIO.IN_LOW,PIO.IN_LOW,PIO.OUT_LOW),autopush=True, push_thresh=8,in_shiftdir=PIO.SHIFT_LEFT)
 def myPins():
-
+    #wait(0, gpio, 4)   # wait for ATN true    	
     wrap_target()
     
     #step 0
-    set(pindirs,0b010)  # set data output, clock input, atn input
-    set(pins,0b00)    [26]# set data to true
-    set(pins,0b00)    [26]# set data to true
+    set(pindirs,0b100)  # set data output, clock input, atn input
+    set(pins,0b000)    [26]# set data to true
+    set(pins,0b000)    [26]# set data to true
     # wait bus command wait for ATN true = 0
-    wait(0, gpio, 3)   # wait for ATN true    
+    
     wait(0, gpio, 2)   # wait for clock true
     #step 1
     wait(1, gpio, 2)  # wait for clock false - signals that talker ready to send
-    set(pins,0b00)    [26]# set data to true
-    set(pins,0b00)    [26]# set data to true
+    set(pins,0b000)    [26]# set data to true
+    set(pins,0b000)    [26]# set data to true
    
-    set(pins,0b00)    [13]# set data to true
+    set(pins,0b000)    [13]# set data to true
     #set(pins,0b00)    [26]# set data to true    
     #step 2
-    set(pins,0b10)   # set data to false
+    set(pins,0b100)   # set data to false
     set(pindirs,0b000)  # set both pins to inputs    
     set(x,8)
     wait(0, gpio, 2)
@@ -59,7 +59,7 @@ def myPins():
     wrap()
 
 
-sm1 = StateMachine(0, myPins, freq=10_000_000,in_base=Pin(3), set_base=Pin(2))
+sm1 = StateMachine(0, myPins, freq=10_000_000,in_base=Pin(4), set_base=Pin(2))
 sm1.active(1)
 #sm2 = StateMachine(0, myPins, freq=2_000_000, set_base=Pin(3))
 #sm2.active(1)
