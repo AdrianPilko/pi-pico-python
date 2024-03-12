@@ -41,7 +41,7 @@ import time
 # Reopen channel 0
 
 @asm_pio(set_init=(PIO.IN_LOW,PIO.IN_LOW,PIO.OUT_LOW),autopush=True, push_thresh=8,in_shiftdir=PIO.SHIFT_LEFT)
-def myPins():
+def listener():
     #wait(0, gpio, 4)   # wait for ATN true    	
     wrap_target()
     
@@ -74,8 +74,37 @@ def myPins():
     wait(0, gpio, 2)    # wait for clock true
     wrap()
 
+@asm_pio(set_init=(PIO.OUT_LOW,PIO.IN_LOW,PIO.OUT_LOW),in_shiftdir=PIO.SHIFT_LEFT)
+def talker():
+    #wait(0, gpio, 4)   # wait for ATN true    	
+    wrap_target()
+    
+    #step 0
+    set(pindirs,0b001)  # set data input, clock output
+    set(pins,0b000)    [26]# set clock to true
+    set(pins,0b000)    [26]# set clock to true
+    
+    wait(0, gpio, 4)   # wait for data true
+    #step 1    
+    set(pins,0b001)    [26]# set clock to false    
+    wait(1, gpio, 4)
+    set(pindirs,0b101)    [26] # set clock and data to output
+    set(pins, 0b000)   [26]   # clock to true
+    pull(block) ## this apopears to flush the RX FIFO ?? and get the correct values
+    set(x,8)    
+    label("bitSendStart")    
+    set(pins, 0b001)   # set clock to false
+    out(pins, 1)    [26]   # one bit 
+    set(pins, 0b000)   # set clock to true
+    jmp(x_dec,"bitSendStart")
+    #push()  no need autopush=True
+    
+    # step 4
+    wait(0, gpio, 2)    # wait for clock true
+    wrap()
 
-sm1 = StateMachine(0, myPins, freq=10_000_000,in_base=Pin(4), set_base=Pin(2))
+sm1 = StateMachine(0, listener, freq=10_000_000,in_base=Pin(4), set_base=Pin(2))
+sm2 = StateMachine(1, talker, freq=10_000_000,out_base=Pin(4), set_base=Pin(2))
 sm1.active(1)
 
 while True:
@@ -90,19 +119,37 @@ while True:
             msb_to_lsb = 0
             for i in range(8):
                 msb_to_lsb |= ((inverted_bits >> i) & 1) << (7 - i)
-            print(count, hex(msb_to_lsb))
             if msb_to_lsb==0x28:
-                print('Listen, device number 8')
-            if msb_to_lsb==0xf0:
-                print('Open channel 0')            
-            if msb_to_lsb==0x3f:
-                print('unlisten all devices')
-            if msb_to_lsb==0x48:
-                print('talk device 8')
-            if msb_to_lsb==0x60:
-                print('Reopen channel 0')
-                sm1.restart()
-            if msb_to_lsb==0x5f:
-                print('Untalk all devices')
-            if msb_to_lsb==0xe0:
-                print('Close channel 0')                   
+                print('0x28 Listen, device number 8')
+            elif msb_to_lsb==0xf0:
+                print('0xf0 Open channel 0')            
+            elif msb_to_lsb==0x3f:
+                print('0x3f unlisten all devices')
+            elif msb_to_lsb==0x48:
+                print('0x48 talk device 8')
+                sm1.active(0) 
+                sm2.active(1)
+                print('sending 0xff')
+                time.sleep(0.1)
+                sm2.put(0xff)
+                print('sending 0xff')
+                sm2.put(0xff)
+                print('sending 0xff')
+                sm2.put(0xff)
+                print('sending 0xff')
+                sm2.put(0xff)
+                print('sending 0xff')
+                sm2.put(0xff)
+                print('sending 0xff')
+                sm2.put(0xff)
+            elif msb_to_lsb==0x60:
+                print('0x60 Reopen channel 0')
+            elif msb_to_lsb==0x5f:
+                print('0x5f Untalk all devices')
+                sm2.active(0)
+                sm1.active(1)                
+            elif msb_to_lsb==0xe0:
+                print('0xe0 Close channel 0')
+            else:
+                print('got bytes ' , hex(msb_to_lsb))
+                
