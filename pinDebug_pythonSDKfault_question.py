@@ -19,18 +19,6 @@ import time
 # /3F	Devices	Unlisten all devices
 # /48	Device	Talk, Device number 8
 # /60	Device	Reopen channel 0
-
-# MPY: soft reboot
-# 1 0x0 0b0 0x0
-# 2 0x14 0b10100 0x28
-# 3 0x100 0b100000000 0x0
-# 4 0xf 0b1111 0xf0
-# 5 0x100 0b100000000 0x0
-# 6 0xfc 0b11111100 0x3f
-# 7 0x100 0b100000000 0x0
-# 8 0x12 0b10010 0x48
-# 9 0x100 0b100000000 0x0
-# 10 0x6 0b110 0x60
 # Device number 8 becomes the master of the bus
 # Host	Receive byte data
 # The host becomes the master of the bus (normal operation)
@@ -39,8 +27,20 @@ import time
 # /E0	Device	Close channel 0
 # /3F	Devices	Unlisten all devices
 
+
+## current output
+# 2 0x28
+# Listen, device number 8
+# 4 0xf0
+# Open channel 0
+# 6 0x3f
+# unlisten all devices
+# 8 0x48
+# talk device 8
+# 10 0x60
+# Reopen channel 0
+
 @asm_pio(set_init=(PIO.IN_LOW,PIO.IN_LOW,PIO.OUT_LOW),autopush=True, push_thresh=8,in_shiftdir=PIO.SHIFT_LEFT)
-#@asm_pio(set_init=(PIO.IN_LOW,PIO.IN_LOW,PIO.OUT_LOW),push_thresh=8,in_shiftdir=PIO.SHIFT_LEFT)
 def myPins():
     #wait(0, gpio, 4)   # wait for ATN true    	
     wrap_target()
@@ -77,18 +77,32 @@ def myPins():
 
 sm1 = StateMachine(0, myPins, freq=10_000_000,in_base=Pin(4), set_base=Pin(2))
 sm1.active(1)
-#sm2 = StateMachine(0, myPins, freq=2_000_000, set_base=Pin(3))
-#sm2.active(1)
 
 while True:
     count = 0
     while True:
         count = count + 1
         rawValue = sm1.get()
-        toConvert = rawValue
-        inverted_bits = toConvert & 0xff
-        # Convert from MSB to LSB
-        msb_to_lsb = 0
-        for i in range(8):
-            msb_to_lsb |= ((inverted_bits >> i) & 1) << (7 - i)
-        print(count, hex(rawValue), bin(rawValue), hex(msb_to_lsb))
+        if (rawValue & 0xff != 0):
+            toConvert = rawValue
+            inverted_bits = toConvert & 0xff
+            # Convert from MSB to LSB
+            msb_to_lsb = 0
+            for i in range(8):
+                msb_to_lsb |= ((inverted_bits >> i) & 1) << (7 - i)
+            print(count, hex(msb_to_lsb))
+            if msb_to_lsb==0x28:
+                print('Listen, device number 8')
+            if msb_to_lsb==0xf0:
+                print('Open channel 0')            
+            if msb_to_lsb==0x3f:
+                print('unlisten all devices')
+            if msb_to_lsb==0x48:
+                print('talk device 8')
+            if msb_to_lsb==0x60:
+                print('Reopen channel 0')
+                sm1.restart()
+            if msb_to_lsb==0x5f:
+                print('Untalk all devices')
+            if msb_to_lsb==0xe0:
+                print('Close channel 0')                   
