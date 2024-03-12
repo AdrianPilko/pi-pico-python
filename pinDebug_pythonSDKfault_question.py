@@ -21,16 +21,23 @@ import time
 # /60	Device	Reopen channel 0
 
 # MPY: soft reboot
-# 1 0xaa 0b10101010 0x55
+# 1 0x0 0b0 0x0
 # 2 0x14 0b10100 0x28
-# 3 0x1aa 0b110101010 0x55
+# 3 0x100 0b100000000 0x0
 # 4 0xf 0b1111 0xf0
-# 5 0x1aa 0b110101010 0x55
+# 5 0x100 0b100000000 0x0
 # 6 0xfc 0b11111100 0x3f
-# 7 0x1aa 0b110101010 0x55
+# 7 0x100 0b100000000 0x0
 # 8 0x12 0b10010 0x48
-# 9 0x1aa 0b110101010 0x55
+# 9 0x100 0b100000000 0x0
 # 10 0x6 0b110 0x60
+# Device number 8 becomes the master of the bus
+# Host	Receive byte data
+# The host becomes the master of the bus (normal operation)
+# /5F	Devices	Untalk all devices
+# /28	Device	Listen, device number 8
+# /E0	Device	Close channel 0
+# /3F	Devices	Unlisten all devices
 
 @asm_pio(set_init=(PIO.IN_LOW,PIO.IN_LOW,PIO.OUT_LOW),autopush=True, push_thresh=8,in_shiftdir=PIO.SHIFT_LEFT)
 #@asm_pio(set_init=(PIO.IN_LOW,PIO.IN_LOW,PIO.OUT_LOW),push_thresh=8,in_shiftdir=PIO.SHIFT_LEFT)
@@ -45,34 +52,23 @@ def myPins():
     # wait bus command wait for ATN true = 0
     
     wait(0, gpio, 2)   # wait for clock true
-    #step 1
-    ##DEBUG fil fifo with a progress counter - this will be read by main loop (we have autopush 8 set 
-    set(y,0b1010)
-    in_(y, 4)
-    in_(y, 4) 
-    #push()
-    ##
-      
+    #step 1    
     wait(1, gpio, 2)  # wait for clock false - signals that talker ready to send
-    set(pins,0b000)    [26]# set data to true
-    set(pins,0b000)    [26]# set data to true
-   
-    set(pins,0b000)    [13]# set data to true
-    #set(pins,0b00)    [26]# set data to true    
+    set(pins,0b000)    [26] # set data to true
     #step 2
     set(pins,0b100)   [26] # set data to false
     set(pindirs,0b000)  # set both pins to inputs
     wait(0, gpio, 2)
     
+    in_(null,8) ## this apopears to flush the RX FIFO ?? and get the correct values
     set(x,8)    
     label("bitReadStart")
     ## read the bits   =least LSB first and true 0volts= bit set to 1, false = 5volts = bit set to 0
     wait(1, gpio, 2)   # wait for clock to go false
     in_(pins, 1)       # input one bit from GPIO 3 
-    wait(0, gpio, 2)   # wait for clock to go true
-    
+    wait(0, gpio, 2)   # wait for clock to go true  
     jmp(x_dec,"bitReadStart")
-    #push()
+    #push()  no need autopush=True
     
     # step 4
     wait(0, gpio, 2)    # wait for clock true
