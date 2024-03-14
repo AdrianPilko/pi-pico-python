@@ -48,7 +48,6 @@ def listener():
     #step 0
     set(pindirs,0b100)  # set data output, clock input, atn input
     set(pins,0b000)    [26]# set data to true
-    set(pins,0b000)    [26]# set data to true
     # wait bus command wait for ATN true = 0
     
     wait(0, gpio, 2)   # wait for clock true
@@ -74,7 +73,7 @@ def listener():
     wait(0, gpio, 2)    # wait for clock true
     wrap()
 
-@asm_pio(set_init=(PIO.OUT_LOW,PIO.IN_LOW,PIO.OUT_LOW),in_shiftdir=PIO.SHIFT_LEFT)
+@asm_pio(set_init=(PIO.OUT_HIGH,PIO.IN_LOW,PIO.OUT_HIGH),in_shiftdir=PIO.SHIFT_LEFT)
 def talker():
     #wait(0, gpio, 4)   # wait for ATN true    	
     wrap_target()
@@ -82,25 +81,25 @@ def talker():
     #step 0
     set(pindirs,0b001)  # set data input, clock output
     set(pins,0b000)    [26]# set clock to true
-    set(pins,0b000)    [26]# set clock to true
-    
+    set(pins,0b001)    [26]# set clock to false
     wait(0, gpio, 4)   # wait for data true
     #step 1    
     set(pins,0b001)    [26]# set clock to false    
     wait(1, gpio, 4)
     set(pindirs,0b101)    [26] # set clock and data to output
     set(pins, 0b000)   [26]   # clock to true
-    pull(block) ## this apopears to flush the RX FIFO ?? and get the correct values
+    pull(block) 
     set(x,8)    
     label("bitSendStart")    
-    set(pins, 0b001)   # set clock to false
+    set(pins, 0b001)   [26]
     out(pins, 1)    [26]   # one bit 
-    set(pins, 0b000)   # set clock to true
+    set(pins, 0b000) 
     jmp(x_dec,"bitSendStart")
-    #push()  no need autopush=True
     
     # step 4
-    wait(0, gpio, 2)    # wait for clock true
+    set(pins, 0b000) [25]
+    set(pindirs,0b100)
+    wait(0, gpio, 4) 
     wrap()
 
 sm1 = StateMachine(0, listener, freq=10_000_000,in_base=Pin(4), set_base=Pin(2))
@@ -129,19 +128,19 @@ while True:
                 print('0x48 talk device 8')
                 sm1.active(0) 
                 sm2.active(1)
-                print('sending 0xff')
+                time.sleep(1)
+                print('send filename \'A\'')
                 time.sleep(0.1)
-                sm2.put(0xff)
-                print('sending 0xff')
-                sm2.put(0xff)
-                print('sending 0xff')
-                sm2.put(0xff)
-                print('sending 0xff')
-                sm2.put(0xff)
-                print('sending 0xff')
-                sm2.put(0xff)
-                print('sending 0xff')
-                sm2.put(0xff)
+                sm2.put('A')
+                print('sent \'A\'')
+                time.sleep(0.1)
+                sm2.put(0x5f)
+                print('sent 0x5f')
+                time.sleep(0.1)
+                sm2.active(0)
+                time.sleep(0.1)
+                sm1.active(1)                
+                print('sm2 talker state machine now inactive, listener now active')
             elif msb_to_lsb==0x60:
                 print('0x60 Reopen channel 0')
             elif msb_to_lsb==0x5f:
