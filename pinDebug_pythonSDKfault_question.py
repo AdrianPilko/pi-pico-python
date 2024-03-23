@@ -73,11 +73,10 @@ def listener():
     wait(0, gpio, 2)    # wait for clock true
     wrap()
 
-@asm_pio(set_init=(PIO.OUT_HIGH,PIO.IN_LOW,PIO.OUT_HIGH),in_shiftdir=PIO.SHIFT_LEFT)
+#@asm_pio(set_init=(PIO.OUT_HIGH,PIO.IN_LOW,PIO.OUT_HIGH),in_shiftdir=PIO.SHIFT_LEFT)
+@asm_pio(set_init=(PIO.IN_LOW,PIO.IN_LOW,PIO.OUT_LOW),in_shiftdir=PIO.SHIFT_LEFT)
 def talker():
-    #wait(0, gpio, 4)   # wait for ATN true    	
     wrap_target()
-    
     #step 0
     set(pindirs,0b001)  # clock output and data input
     set(pins,0b001)    [31]# set clock to high
@@ -118,14 +117,17 @@ def talker():
     wrap()
 
 sm1 = StateMachine(0, listener, freq=10_000_000,in_base=Pin(4), set_base=Pin(2))
-sm2 = StateMachine(7, talker, freq=10_000_000,out_base=Pin(4), set_base=Pin(2))
+sm2 = StateMachine(4, talker, freq=10_000_000,out_base=Pin(4), set_base=Pin(2))
 sm1.active(1)
+sm2.active(0)
+
 print('set stae machine 1 active - listen')
 
 while True:
     count = 0
     while True:
         count = count + 1
+        print('before sm1.get()')
         rawValue = sm1.get()
         if (rawValue & 0xff != 0):
             toConvert = rawValue
