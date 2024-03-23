@@ -15,7 +15,7 @@ import time
 ## correct sequence is:
 # /28	Device	Listen, device number 8
 # /F0	Device	Open channel 0
-# Device	Send filename bytes
+# Device	Send filename bytes <<<< never see this???!
 # /3F	Devices	Unlisten all devices
 # /48	Device	Talk, Device number 8
 # /60	Device	Reopen channel 0
@@ -79,21 +79,36 @@ def talker():
     wrap_target()
     
     #step 0
-    set(pindirs,0b001)  # set data input, clock output
-    set(pins,0b000)    [26]# set clock to true
-    set(pins,0b001)    [26]# set clock to false
-    wait(0, gpio, 4)   # wait for data true
-    #step 1    
-    set(pins,0b001)    [26]# set clock to false    
-    wait(1, gpio, 4)
+    set(pindirs,0b001)  # clock output and data input
+    set(pins,0b001)    [31]# set clock to high
+    # set clock to low for minimum of 80usec is a loop of 3.1usec * 25.806, at 10MHz clock freq
+    ## values as per c64 programmers reference manual
+    set(x,26)
+    label("T_DA_delayLoop")
+    set(pins,0b000)    [31]
+    jmp(x_dec, "T_DA_delayLoop")
+    
+        
+    wait(1, gpio, 4)   # wait for data high - signals the listener (c64 in this case) is now ready for data
+    
+    
     set(pindirs,0b101)    [26] # set clock and data to output
-    set(pins, 0b000)   [26]   # clock to true
     pull(block) 
     set(x,8)    
-    label("bitSendStart")    
-    set(pins, 0b001)   [26]
-    out(pins, 1)    [26]   # one bit 
-    set(pins, 0b000) 
+    label("bitSendStart")
+    
+    
+    set(y,10)
+    label("TS_DelayLoop")
+    set(pins, 0b000)   [20] # bit setup time 20usec thats 20cycles * 10iterations at 10MHz
+    jmp(y_dec,"TS_DelayLoop")
+    
+    out(pins, 1)       # set the bit
+    set(y,10)
+    label("TV_DelayLoop") ## data valid holds"
+    set(pins, 0b001)   [20] # transition clock and hold for 20usec thats 20cycles * 10iterations at 10MHz
+    jmp(y_dec,"TV_DelayLoop");
+    
     jmp(x_dec,"bitSendStart")
     
     # step 4
@@ -103,8 +118,9 @@ def talker():
     wrap()
 
 sm1 = StateMachine(0, listener, freq=10_000_000,in_base=Pin(4), set_base=Pin(2))
-sm2 = StateMachine(1, talker, freq=10_000_000,out_base=Pin(4), set_base=Pin(2))
+sm2 = StateMachine(7, talker, freq=10_000_000,out_base=Pin(4), set_base=Pin(2))
 sm1.active(1)
+print('set stae machine 1 active - listen')
 
 while True:
     count = 0
